@@ -37,6 +37,13 @@ class SocketServer(object):
         self.ping_interval = ping_interval
 
     def __call__(self, environ, start_response):
+        path_info = environ["PATH_INFO"]
+        if path_info == "/health":
+            start_response("200 OK", [
+                ("Content-Type", "application/json"),
+            ])
+            return ['{"status": "OK"}']
+
         websocket = environ.get("wsgi.websocket")
         if not websocket:
             self.metrics.counter("conn.rejected.not_websocket").increment()
