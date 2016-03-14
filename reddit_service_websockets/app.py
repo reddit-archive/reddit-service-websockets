@@ -16,7 +16,6 @@ CONFIG_SPEC = {
     },
 
     "web": {
-        "allowed_origins": config.TupleOf(config.String),
         "mac_secret": config.Base64,
         "ping_interval": config.Integer,
     },
@@ -38,7 +37,6 @@ def make_app(raw_config):
     app = SocketServer(
         metrics=metrics_client,
         dispatcher=dispatcher,
-        allowed_origins=cfg.web.allowed_origins,
         mac_secret=cfg.web.mac_secret,
         ping_interval=cfg.web.ping_interval,
     )

@@ -11,32 +11,6 @@ import geventwebsocket.handler
 LOG = logging.getLogger(__name__)
 
 
-def is_subdomain(domain, base_domain):
-    return domain == base_domain or domain.endswith("." + base_domain)
-
-
-def is_allowed_origin(origin, whitelist):
-    # if there's no whitelist, assume all is ok
-    if not whitelist:
-        return True
-
-    try:
-        parsed = urlparse.urlparse(origin)
-    except ValueError:
-        return False
-
-    if parsed.scheme not in ("http", "https"):
-        return False
-
-    if parsed.port is not None and parsed.port not in (80, 443):
-        return False
-
-    for domain in whitelist:
-        if is_subdomain(parsed.hostname, domain):
-            return True
-    return False
-
-
 def is_valid_namespace(environ, mac_secret):
     namespace = environ.get("PATH_INFO", "")
     if not namespace:
@@ -81,14 +55,6 @@ def constant_time_compare(actual, expected):
 
 class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
     def upgrade_connection(self):
-        origin = self.environ.get("HTTP_ORIGIN", "")
-        if not is_allowed_origin(origin, self.application.allowed_origins):
-            LOG.info("rejected connection from %s due to bad origin %r",
-                     self.environ["REMOTE_ADDR"], origin)
-            self.application.metrics.counter("conn.rejected.bad_origin").increment()
-            self.start_response("403 Forbidden", [])
-            return ["Forbidden"]
-
         if not is_valid_namespace(self.environ, self.application.mac_secret):
             LOG.info("rejected connection from %s due to invalid namespace",
                      self.environ["REMOTE_ADDR"])
@@ -100,11 +66,9 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
 
 
 class SocketServer(object):
-    def __init__(self, metrics, dispatcher, allowed_origins, mac_secret,
-                 ping_interval):
+    def __init__(self, metrics, dispatcher, mac_secret, ping_interval):
         self.metrics = metrics
         self.dispatcher = dispatcher
-        self.allowed_origins = allowed_origins
         self.mac_secret = mac_secret
         self.ping_interval = ping_interval
 
