@@ -1,11 +1,10 @@
 import gevent
 
-from baseplate import config
+from baseplate import config, make_metrics_client
 
 from .dispatcher import MessageDispatcher
 from .socketserver import SocketServer
 from .source import MessageSource
-from .stats import StatsClient, StatsCollector
 
 
 CONFIG_SPEC = {
@@ -21,22 +20,15 @@ CONFIG_SPEC = {
         "mac_secret": config.Base64,
         "ping_interval": config.Integer,
     },
-
-    "stats": {
-        "host": config.String,
-        "port": config.Integer,
-    },
 }
 
 
 def make_app(raw_config):
     cfg = config.parse_config(raw_config, CONFIG_SPEC)
 
-    stats = StatsClient(cfg.stats.host, cfg.stats.port)
+    metrics_client = make_metrics_client(raw_config)
 
-    dispatcher = MessageDispatcher(
-        stats=stats,
-    )
+    dispatcher = MessageDispatcher(metrics=metrics_client)
 
     source = MessageSource(
         config=cfg.amqp,
@@ -44,19 +36,13 @@ def make_app(raw_config):
     )
 
     app = SocketServer(
-        stats=stats,
+        metrics=metrics_client,
         dispatcher=dispatcher,
         allowed_origins=cfg.web.allowed_origins,
         mac_secret=cfg.web.mac_secret,
         ping_interval=cfg.web.ping_interval,
     )
 
-    collector = StatsCollector(
-        stats=stats,
-        dispatcher=dispatcher,
-    )
-
     gevent.spawn(source.pump_messages)
-    gevent.spawn(collector.collect_and_report_periodically)
 
     return app

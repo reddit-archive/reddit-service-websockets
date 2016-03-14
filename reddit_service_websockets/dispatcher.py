@@ -15,17 +15,14 @@ def _walk_namespace_hierarchy(namespace):
 
 
 class MessageDispatcher(object):
-    def __init__(self, stats):
+    def __init__(self, metrics):
         self.consumers = {}
-        self.stats = stats
-
-    def get_connection_count(self):
-        return sum(len(sockets) for sockets in self.consumers.itervalues())
+        self.metrics = metrics
 
     def on_message_received(self, namespace, message):
         consumers = self.consumers.get(namespace, [])
 
-        with self.stats.timer("sutro.dispatch"):
+        with self.metrics.timer("dispatch"):
             for consumer in consumers:
                 consumer.put(message)
 

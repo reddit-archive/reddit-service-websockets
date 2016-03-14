@@ -85,14 +85,14 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
         if not is_allowed_origin(origin, self.application.allowed_origins):
             LOG.info("rejected connection from %s due to bad origin %r",
                      self.environ["REMOTE_ADDR"], origin)
-            self.application.stats.count("sutro.conn.rejected.bad_origin")
+            self.application.metrics.counter("conn.rejected.bad_origin").increment()
             self.start_response("403 Forbidden", [])
             return ["Forbidden"]
 
         if not is_valid_namespace(self.environ, self.application.mac_secret):
             LOG.info("rejected connection from %s due to invalid namespace",
                      self.environ["REMOTE_ADDR"])
-            self.application.stats.count("sutro.conn.rejected.bad_namespace")
+            self.application.metrics.counter("conn.rejected.bad_namespace").increment()
             self.start_response("403 Forbidden", [])
             return ["Forbidden"]
 
@@ -100,9 +100,9 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
 
 
 class SocketServer(object):
-    def __init__(self, stats, dispatcher, allowed_origins, mac_secret,
+    def __init__(self, metrics, dispatcher, allowed_origins, mac_secret,
                  ping_interval):
-        self.stats = stats
+        self.metrics = metrics
         self.dispatcher = dispatcher
         self.allowed_origins = allowed_origins
         self.mac_secret = mac_secret
@@ -111,13 +111,13 @@ class SocketServer(object):
     def __call__(self, environ, start_response):
         websocket = environ.get("wsgi.websocket")
         if not websocket:
-            self.stats.count("sutro.conn.rejected.not_websocket")
+            self.metrics.counter("conn.rejected.not_websocket").increment()
             start_response("400 Bad Request", [])
             return ["you are not a websocket"]
 
         namespace = environ["PATH_INFO"]
         try:
-            self.stats.count("sutro.conn.connected")
+            self.metrics.counter("conn.connected").increment()
             for msg in self.dispatcher.listen(namespace,
                                               max_timeout=self.ping_interval):
                 if msg is not None:
@@ -127,4 +127,4 @@ class SocketServer(object):
         except geventwebsocket.WebSocketError as e:
             LOG.debug("socket failed: %r", e)
         finally:
-            self.stats.count("sutro.conn.lost")
+            self.metrics.counter("conn.lost").increment()
