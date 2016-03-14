@@ -1,6 +1,7 @@
 import gevent
 
-from .config import parse_config, comma_delimited, base64
+from baseplate import config
+
 from .dispatcher import MessageDispatcher
 from .socketserver import SocketServer
 from .source import MessageSource
@@ -9,50 +10,45 @@ from .stats import StatsClient, StatsCollector
 
 CONFIG_SPEC = {
     "amqp": {
-        "host": str,
-        "port": int,
-        "vhost": str,
-        "username": str,
-        "password": str,
+        "endpoint": config.Endpoint,
+        "vhost": config.String,
+        "username": config.String,
+        "password": config.String,
     },
 
     "web": {
-        "allowed_origins": comma_delimited,
-        "mac_secret": base64,
-        "ping_interval": int,
+        "allowed_origins": config.TupleOf(config.String),
+        "mac_secret": config.Base64,
+        "ping_interval": config.Integer,
     },
 
     "stats": {
-        "host": str,
-        "port": int,
+        "host": config.String,
+        "port": config.Integer,
     },
 }
 
 
 def make_app(raw_config):
-    config = parse_config(raw_config, CONFIG_SPEC)
+    cfg = config.parse_config(raw_config, CONFIG_SPEC)
 
-    stats = StatsClient(config["stats"]["host"], config["stats"]["port"])
+    stats = StatsClient(cfg.stats.host, cfg.stats.port)
 
     dispatcher = MessageDispatcher(
         stats=stats,
     )
 
     source = MessageSource(
-        host=config["amqp"]["host"],
-        port=config["amqp"]["port"],
-        vhost=config["amqp"]["vhost"],
-        username=config["amqp"]["username"],
-        password=config["amqp"]["password"],
+        config=cfg.amqp,
         message_handler=dispatcher.on_message_received,
     )
 
     app = SocketServer(
         stats=stats,
         dispatcher=dispatcher,
-        allowed_origins=config["web"]["allowed_origins"],
-        mac_secret=config["web"]["mac_secret"],
-        ping_interval=config["web"]["ping_interval"],
+        allowed_origins=cfg.web.allowed_origins,
+        mac_secret=cfg.web.mac_secret,
+        ping_interval=cfg.web.ping_interval,
     )
 
     collector = StatsCollector(

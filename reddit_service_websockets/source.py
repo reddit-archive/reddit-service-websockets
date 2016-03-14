@@ -17,12 +17,14 @@ class MessageSource(object):
 
     """
 
-    def __init__(self, host, port, vhost, username, password, message_handler):
-        self.host = host
-        self.port = port
-        self.vhost = vhost
-        self.username = username
-        self.password = password
+    def __init__(self, config, message_handler):
+        assert config.endpoint.family == socket.AF_INET
+
+        self.host = config.endpoint.address.host
+        self.port = config.endpoint.address.port
+        self.vhost = config.vhost
+        self.username = config.username
+        self.password = config.password
         self.message_handler = message_handler
 
     def connect(self):
