@@ -1,0 +1,7 @@
+*.pyc
+*.pyo
+__pycache__
+
+build/
+reddit_service_websockets.egg-info
+reddit_service_websockets/*_thrift
