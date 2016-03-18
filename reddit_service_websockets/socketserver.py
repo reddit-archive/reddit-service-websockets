@@ -13,6 +13,13 @@ LOG = logging.getLogger(__name__)
 
 class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
     def upgrade_connection(self):
+        """Validate authorization to attach to a namespace before connecting.
+
+        We hook into the geventwebsocket stuff here to ensure that the
+        authorization is valid before we return a `101 Switching Protocols`
+        rather than connecting then disconnecting the user.
+
+        """
         app = self.application
 
         try:
@@ -36,6 +43,7 @@ class SocketServer(object):
         self.dispatcher = dispatcher
         self.signer = MessageSigner(mac_secret)
         self.ping_interval = ping_interval
+        self.status_publisher = None
 
     def __call__(self, environ, start_response):
         path_info = environ["PATH_INFO"]
@@ -60,6 +68,7 @@ class SocketServer(object):
 
         try:
             self.metrics.counter("conn.connected").increment()
+            self._send_message("connect", {"namespace": namespace})
             while True:
                 message = websocket.receive()
                 if message is None:
@@ -68,7 +77,12 @@ class SocketServer(object):
             LOG.debug("socket failed: %r", e)
         finally:
             self.metrics.counter("conn.lost").increment()
+            self._send_message("disconnect", {"namespace": namespace})
             dispatcher.kill()
+
+    def _send_message(self, key, value):
+        if self.status_publisher:
+            self.status_publisher("websocket.%s" % key, value)
 
     def _pump_dispatcher(self, namespace, websocket):
         for msg in self.dispatcher.listen(namespace, max_timeout=self.ping_interval):

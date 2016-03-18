@@ -27,6 +27,15 @@ class MessageDispatcher(object):
                 consumer.put(message)
 
     def listen(self, namespace, max_timeout):
+        """Register to listen to a namespace and yield messages as they arrive.
+
+        If no messages arrive within `max_timeout` seconds, this will yield a
+        `None` to allow clients to do periodic actions like send PINGs.
+
+        This will run forever and yield items as an iterable. Use it in a loop
+        and break out of it when you want to deregister.
+
+        """
         queue = gevent.queue.Queue()
 
         namespace = namespace.rstrip("/")

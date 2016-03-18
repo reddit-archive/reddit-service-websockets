@@ -13,6 +13,11 @@ CONFIG_SPEC = {
         "vhost": config.String,
         "username": config.String,
         "password": config.String,
+
+        "exchange": {
+            "broadcast": config.String,
+            "status": config.String,
+        },
     },
 
     "web": {
@@ -31,7 +36,6 @@ def make_app(raw_config):
 
     source = MessageSource(
         config=cfg.amqp,
-        message_handler=dispatcher.on_message_received,
     )
 
     app = SocketServer(
@@ -40,6 +44,9 @@ def make_app(raw_config):
         mac_secret=cfg.web.mac_secret,
         ping_interval=cfg.web.ping_interval,
     )
+
+    source.message_handler = dispatcher.on_message_received
+    app.status_publisher = source.send_message
 
     gevent.spawn(source.pump_messages)
 
