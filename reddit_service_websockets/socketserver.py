@@ -1,6 +1,7 @@
 import logging
 import urlparse
 
+import gevent
 import geventwebsocket
 import geventwebsocket.handler
 
@@ -55,15 +56,23 @@ class SocketServer(object):
         assert environ["signature_validated"]
 
         namespace = environ["PATH_INFO"]
+        dispatcher = gevent.spawn(self._pump_dispatcher, namespace, websocket)
+
         try:
             self.metrics.counter("conn.connected").increment()
-            for msg in self.dispatcher.listen(namespace,
-                                              max_timeout=self.ping_interval):
-                if msg is not None:
-                    websocket.send(msg)
-                else:
-                    websocket.send_frame("", websocket.OPCODE_PONG)
+            while True:
+                message = websocket.receive()
+                if message is None:
+                    break
         except geventwebsocket.WebSocketError as e:
             LOG.debug("socket failed: %r", e)
         finally:
             self.metrics.counter("conn.lost").increment()
+            dispatcher.kill()
+
+    def _pump_dispatcher(self, namespace, websocket):
+        for msg in self.dispatcher.listen(namespace, max_timeout=self.ping_interval):
+            if msg is not None:
+                websocket.send(msg)
+            else:
+                websocket.send_frame("", websocket.OPCODE_PING)
