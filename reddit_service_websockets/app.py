@@ -18,6 +18,8 @@ CONFIG_SPEC = {
             "broadcast": config.String,
             "status": config.String,
         },
+
+        "send_status_messages": config.Boolean,
     },
 
     "web": {

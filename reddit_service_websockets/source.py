@@ -29,6 +29,7 @@ class MessageSource(object):
         self.password = config.password
         self.broadcast_exchange = config.exchange.broadcast
         self.status_exchange = config.exchange.status
+        self.send_status_messages = config.send_status_messages
         self.message_handler = None
 
         self.channel = None
@@ -82,7 +83,7 @@ class MessageSource(object):
 
     def send_message(self, key, payload):
         """Publish a status update to the status exchange."""
-        if self.publisher:
+        if self.send_status_messages and self.publisher:
             serialized_payload = json.dumps(payload).encode("utf-8")
             message = haigha.message.Message(serialized_payload)
             self.publisher.publish(message, self.status_exchange, routing_key=key)
