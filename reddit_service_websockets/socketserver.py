@@ -12,6 +12,23 @@ LOG = logging.getLogger(__name__)
 
 
 class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
+    def read_request(self, raw_requestline):
+        retval = super(WebSocketHandler, self).read_request(raw_requestline)
+
+        # if the client address doesn't exist, we're probably bound to a
+        # unix socket and someone else (e.g. nginx) will be forwarding the
+        # client's real address.
+        if not self.client_address:
+            try:
+                self.client_address = (
+                    self.headers["x-forwarded-for"],
+                    int(self.headers["x-forwarded-port"]),
+                )
+            except KeyError:
+                raise Exception("bound to unix socket but no x-forwarded-{for,port} headers")
+
+        return retval
+
     def upgrade_connection(self):
         """Validate authorization to attach to a namespace before connecting.
 
