@@ -25,7 +25,7 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
                     int(self.headers["x-forwarded-port"]),
                 )
             except KeyError:
-                raise Exception("bound to unix socket but no x-forwarded-{for,port} headers")
+                pass
 
         return retval
 
@@ -37,6 +37,12 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
         rather than connecting then disconnecting the user.
 
         """
+        if not self.client_address:
+            # we can't do websockets if we don't have a valid client_address
+            # because geventwebsocket uses that to keep connection objects.
+            # if this error is happening, you probably need to update your proxy
+            raise Exception("no client address. check x-forwarded-{for,port}")
+
         app = self.application
 
         try:
