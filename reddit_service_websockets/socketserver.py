@@ -29,6 +29,10 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
 
         return retval
 
+    def log_request(self):
+        # geventwebsocket logs every request at INFO level. that's annoying.
+        pass
+
     def upgrade_connection(self):
         """Validate authorization to attach to a namespace before connecting.
 
