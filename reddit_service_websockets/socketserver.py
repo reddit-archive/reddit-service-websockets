@@ -4,11 +4,18 @@ import urlparse
 import gevent
 import geventwebsocket
 import geventwebsocket.handler
+from geventwebsocket.websocket import WebSocket
 
 from baseplate.crypto import MessageSigner, SignatureError
 
+from .patched_websocket import read_frame as patched_read_frame
+from .patched_websocket import send_raw_frame
+
 
 LOG = logging.getLogger(__name__)
+
+
+WebSocket.read_frame = patched_read_frame
 
 
 class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
@@ -61,7 +68,41 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
             return ["Forbidden"]
 
         self.environ["signature_validated"] = True
+
+        # Check if compression is supported.  The RFC explanation for the
+        # variations on what is accepted here is convoluted, so we'll just
+        # stick with the happy case:
+        #
+        #    https://tools.ietf.org/html/rfc6455#page-48
+        #
+        # Worst case scenario, we fall back to not compressing.
+        extensions = self.environ.get('HTTP_SEC_WEBSOCKET_EXTENSIONS')
+        extensions = {extension.split(";")[0].strip()
+                      for extension in extensions.split(",")}
+        self.environ["supports_compression"] = \
+            "permessage-deflate" in extensions
+
         return super(WebSocketHandler, self).upgrade_connection()
+
+    def start_response(self, status, headers, exc_info=None):
+        if self.environ["supports_compression"]:
+
+            # {client,server}_no_context_takeover prevents compression context
+            # from being used across frames.  This is necessary so that we
+            # don't have to maintain a separate compressor for every connection
+            # that's made, which would be a large memory footprint.  This also
+            # lets us compress a message once and send to all clients, saving
+            # on CPU electrons.
+            headers.append(("Sec-WebSocket-Extensions",
+                            "permessage-deflate; server_no_context_takeover; "
+                            "client_no_context_takeover"))
+            self.application.metrics.counter(
+                "compression.permessage-deflate").increment()
+        else:
+            self.application.metrics.counter("compression.none").increment()
+
+        return super(WebSocketHandler, self).start_response(
+            status, headers, exc_info=exc_info)
 
 
 class SocketServer(object):
@@ -91,13 +132,17 @@ class SocketServer(object):
         assert environ["signature_validated"]
 
         namespace = environ["PATH_INFO"]
-        dispatcher = gevent.spawn(self._pump_dispatcher, namespace, websocket)
+
+        dispatcher = gevent.spawn(
+            self._pump_dispatcher, namespace, websocket,
+            supports_compression=environ["supports_compression"])
 
         try:
             self.metrics.counter("conn.connected").increment()
             self._send_message("connect", {"namespace": namespace})
             while True:
                 message = websocket.receive()
+                LOG.debug('message received: %r', message)
                 if message is None:
                     break
         except geventwebsocket.WebSocketError as e:
@@ -111,9 +156,12 @@ class SocketServer(object):
         if self.status_publisher:
             self.status_publisher("websocket.%s" % key, value)
 
-    def _pump_dispatcher(self, namespace, websocket):
+    def _pump_dispatcher(self, namespace, websocket, supports_compression):
         for msg in self.dispatcher.listen(namespace, max_timeout=self.ping_interval):
             if msg is not None:
-                websocket.send(msg)
+                if supports_compression and msg.compressed is not None:
+                    send_raw_frame(websocket, msg.compressed)
+                else:
+                    websocket.send(msg.raw)
             else:
                 websocket.send_frame("", websocket.OPCODE_PING)
