@@ -1,3 +1,4 @@
+import base64
 import logging
 import urlparse
 
@@ -16,6 +17,10 @@ LOG = logging.getLogger(__name__)
 
 
 WebSocket.read_frame = patched_read_frame
+
+
+class UnauthorizedError(Exception):
+    pass
 
 
 class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
@@ -106,20 +111,49 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
 
 
 class SocketServer(object):
-    def __init__(self, metrics, dispatcher, mac_secret, ping_interval):
+    def __init__(self, metrics,
+                 dispatcher,
+                 mac_secret,
+                 ping_interval,
+                 admin_auth,
+                 conn_shed_rate,
+    ):
         self.metrics = metrics
         self.dispatcher = dispatcher
         self.signer = MessageSigner(mac_secret)
         self.ping_interval = ping_interval
+        self.admin_auth = admin_auth
+        self.shed_rate_per_sec = conn_shed_rate
         self.status_publisher = None
+        self.quiesced = False
+        self.connections = set()
 
     def __call__(self, environ, start_response):
         path_info = environ["PATH_INFO"]
+        req_method = environ['REQUEST_METHOD']
+
+        if self.quiesced:
+            start_response("410 Gone", [])
+            return ['{"status": "quiesced", "connections": %d}' %
+                    len(self.connections)]
+
+        if path_info == '/quiesce' and req_method == 'POST':
+            try:
+                self._quiesce(environ)
+                start_response("200 OK", [
+                    ("Content-Type", "application/json"),
+                ])
+                return ['{"remaining": %d"}' % len(self.connections)]
+            except UnauthorizedError as e:
+                start_response("401 Unauthorized", [])
+                return ["invalid authentication"]
+
         if path_info == "/health":
             start_response("200 OK", [
                 ("Content-Type", "application/json"),
             ])
-            return ['{"status": "OK"}']
+            return ['{"status": "OK", "connections": %d}' %
+                    len(self.connections)]
 
         websocket = environ.get("wsgi.websocket")
         if not websocket:
@@ -136,6 +170,7 @@ class SocketServer(object):
         dispatcher = gevent.spawn(
             self._pump_dispatcher, namespace, websocket,
             supports_compression=environ.get("supports_compression"))
+        self.connections.add(websocket)
 
         try:
             self.metrics.counter("conn.connected").increment()
@@ -150,7 +185,57 @@ class SocketServer(object):
         finally:
             self.metrics.counter("conn.lost").increment()
             self._send_message("disconnect", {"namespace": namespace})
+            self.connections.remove(websocket)
             dispatcher.kill()
+
+    def _authorized_to_quiesce(self, environ):
+        auth_header = environ.get('HTTP_AUTHORIZATION', None)
+        if not auth_header:
+            return False
+        auth_scheme, sep, auth_token = auth_header.strip().partition(' ')
+        assert auth_scheme.lower() == 'basic'
+        return auth_token == self.admin_auth
+
+    def _quiesce(self, environ):
+        """Set service state to quiesced and shed existing connections."""
+        if not self._authorized_to_quiesce(environ):
+            raise UnauthorizedError
+
+        # Delay shedding to allow service deregistration after quiescing
+        shed_delay_secs = 30
+
+        if not self.quiesced:
+            self.quiesced = True
+            total_conns = len(self.connections)
+            # Note: There's still a small chance that we miss connections
+            #   that came in before we set to quiesced but are
+            #   still being established.
+            conns = self.connections.copy()
+
+            # Shed shed_rate_per_sec connections every second
+            #   after service deregistration delay.
+            cur_iter_sec = 0
+            for remaining in xrange(total_conns, 0, -self.shed_rate_per_sec):
+                cur_iter_sec += 1
+                # Check if fewer than shed_rate_per_sec conns left
+                #   in set so there's no over-popping.
+                if remaining >= self.shed_rate_per_sec:
+                    num_conns = self.shed_rate_per_sec
+                else:
+                    num_conns = remaining
+                gevent.spawn_later(cur_iter_sec + shed_delay_secs,
+                                   self._shed_connections,
+                                   [conns.pop() for j in xrange(num_conns)])
+
+
+    def _shed_connections(self, connections):
+        LOG.debug("closing %d connections", len(connections))
+        for conn in connections:
+            try:
+                conn.send_frame("", conn.OPCODE_CLOSE)
+            except geventwebsocket.WebSocketError:
+                # Connection might already be closed or dead
+                pass
 
     def _send_message(self, key, value):
         if self.status_publisher:

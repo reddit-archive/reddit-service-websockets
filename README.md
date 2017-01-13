@@ -25,6 +25,21 @@ request.
 If configured to do so, the service will also insert connect/disconnect
 messages onto a topic exchange in AMQP.
 
+### Testing and Development
+
+There are two Docker images provided for development and testing.
+
+* `Dockerfile`: A Docker image definition for running a local version of the service.
+* `Dockerfile.test`: A Docker image definition for running tests.
+
+```
+# Exposes websocket service at 127.0.0.1:9090
+docker build . -t ws-server -f Dockerfile  && docker run --rm -p 9090:9090 ws-server
+
+# Run code tests
+docker build . -t ws-tests -f Dockerfile.test  && docker run ws-tests
+```
+
 ### Further reading
 
 This service is used and written for reddit.com's socket needs. Client and

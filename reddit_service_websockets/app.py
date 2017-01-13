@@ -25,6 +25,8 @@ CONFIG_SPEC = {
     "web": {
         "mac_secret": config.Base64,
         "ping_interval": config.Integer,
+        "admin_auth": config.String,
+        "conn_shed_rate": config.Integer,
     },
 }
 
@@ -45,6 +47,8 @@ def make_app(raw_config):
         dispatcher=dispatcher,
         mac_secret=cfg.web.mac_secret,
         ping_interval=cfg.web.ping_interval,
+        admin_auth=cfg.web.admin_auth,
+        conn_shed_rate=cfg.web.conn_shed_rate,
     )
 
     source.message_handler = dispatcher.on_message_received
