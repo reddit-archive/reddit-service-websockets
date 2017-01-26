@@ -26,19 +26,7 @@ from .patched_websocket import make_compressed_frame
 COMPRESSOR = compressobj(7, DEFLATED, -MAX_WBITS)
 
 
-# We don't bother compressing if the message would already fit into a single
-# packet (i.e. if the length of the message including IP and TCP headers is
-# less than the Maximum Transmission Unit).
-#
-# According to this, the MTU of a packet includes IP and TCP but not ethernet
-# headers:
-#
-#     http://stackoverflow.com/a/9151421/720638
-#
-# 1500 - common MTU size
-# 60 - TCP max header size
-# 60 - IP max header size
-MIN_COMPRESS_SIZE = 1500 - 60 - 60
+MIN_COMPRESS_SIZE = 50
 
 
 Message = namedtuple('Message', ['compressed', 'raw'])
