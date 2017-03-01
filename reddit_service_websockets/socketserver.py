@@ -196,9 +196,9 @@ class SocketServer(object):
         assert auth_scheme.lower() == 'basic'
         return auth_token == self.admin_auth
 
-    def _quiesce(self, environ):
+    def _quiesce(self, environ, bypass_auth=False):
         """Set service state to quiesced and shed existing connections."""
-        if not self._authorized_to_quiesce(environ):
+        if not bypass_auth and not self._authorized_to_quiesce(environ):
             raise UnauthorizedError
 
         # Delay shedding to allow service deregistration after quiescing

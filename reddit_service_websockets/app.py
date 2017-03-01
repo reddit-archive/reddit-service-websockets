@@ -1,3 +1,5 @@
+import signal
+
 import gevent
 
 from baseplate import config, make_metrics_client
@@ -50,6 +52,15 @@ def make_app(raw_config):
         admin_auth=cfg.web.admin_auth,
         conn_shed_rate=cfg.web.conn_shed_rate,
     )
+
+    # register SIGUSR2 to trigger app quiescing,
+    #  useful if app processes are behind
+    #  a process manager like einhorn.
+    def _handle_quiesce_signal(_, frame):
+        app._quiesce({}, bypass_auth=True)
+
+    signal.signal(signal.SIGUSR2, _handle_quiesce_signal)
+    signal.siginterrupt(signal.SIGUSR2, False)
 
     source.message_handler = dispatcher.on_message_received
     app.status_publisher = source.send_message
