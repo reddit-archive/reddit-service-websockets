@@ -11,6 +11,5 @@ setup(
         "gevent-websocket",
         "haigha",
         "baseplate",
-        "manhole",
     ],
 )
