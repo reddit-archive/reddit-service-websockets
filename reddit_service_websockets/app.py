@@ -3,10 +3,14 @@ import signal
 import gevent
 
 from baseplate import config, make_metrics_client
+import manhole
 
 from .dispatcher import MessageDispatcher
 from .socketserver import SocketServer
 from .source import MessageSource
+
+
+manhole.install()
 
 
 CONFIG_SPEC = {
