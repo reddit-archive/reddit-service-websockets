@@ -26,7 +26,7 @@ from .patched_websocket import make_compressed_frame
 COMPRESSOR = compressobj(7, DEFLATED, -MAX_WBITS)
 
 
-MIN_COMPRESS_SIZE = 50
+MIN_COMPRESS_SIZE = 400
 
 
 Message = namedtuple('Message', ['compressed', 'raw'])
