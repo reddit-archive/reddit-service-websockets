@@ -1,5 +1,6 @@
 import base64
 import logging
+import sys
 import urlparse
 
 import gevent
@@ -227,6 +228,11 @@ class SocketServer(object):
                                    self._shed_connections,
                                    [conns.pop() for j in xrange(num_conns)])
 
+            # Terminate the service after shedding
+            termination_delay_secs = 10
+            gevent.spawn_later(shed_delay_secs + cur_iter_sec +
+                               termination_delay_secs,
+                               self._shutdown)
 
     def _shed_connections(self, connections):
         LOG.debug("closing %d connections", len(connections))
@@ -236,6 +242,10 @@ class SocketServer(object):
             except geventwebsocket.WebSocketError:
                 # Connection might already be closed or dead
                 pass
+
+    def _shutdown(self):
+        LOG.info("Shutting down.")
+        sys.exit()
 
     def _send_message(self, key, value):
         if self.status_publisher:

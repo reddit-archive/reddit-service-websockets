@@ -3,7 +3,11 @@ import unittest
 
 import geventwebsocket.websocket
 from geventwebsocket.websocket import WebSocket
-from mock import Mock, patch
+from mock import (
+    call,
+    Mock,
+    patch,
+)
 
 from reddit_service_websockets.socketserver import (
     SocketServer,
@@ -73,6 +77,13 @@ class SocketServerTests(unittest.TestCase):
         self.server.connections = set([mock_conn])
 
         self.server._quiesce(environ)
-        # 31 -> shed_delay_seconds + 1 second for iteration
-        gevent_patch.assert_called_with(31, self.server._shed_connections, [mock_conn])
+
+        calls = [
+            # 31 -> shed_delay_seconds + 1 second for iteration
+            call(31, self.server._shed_connections, [mock_conn]),
+            # 41 -> shed_delay_seconds + 1 second for iteration +
+            #       termination_delay_secs
+            call(41, self.server._shutdown),
+        ]
+        gevent_patch.assert_has_calls(calls)
 
