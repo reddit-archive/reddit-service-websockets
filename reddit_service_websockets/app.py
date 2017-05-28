@@ -8,6 +8,7 @@ from baseplate import (
     metrics_client_from_config,
     error_reporter_from_config,
 )
+from baseplate.secrets import secrets_store_from_config
 from raven.middleware import Sentry
 
 from .dispatcher import MessageDispatcher
@@ -34,7 +35,6 @@ CONFIG_SPEC = {
     },
 
     "web": {
-        "mac_secret": config.Base64,
         "ping_interval": config.Integer,
         "admin_auth": config.String,
         "conn_shed_rate": config.Integer,
@@ -47,6 +47,7 @@ def make_app(raw_config):
 
     metrics_client = metrics_client_from_config(raw_config)
     error_reporter = error_reporter_from_config(raw_config, __name__)
+    secrets = secrets_store_from_config(raw_config)
 
     dispatcher = MessageDispatcher(metrics=metrics_client)
 
@@ -57,7 +58,7 @@ def make_app(raw_config):
     app = SocketServer(
         metrics=metrics_client,
         dispatcher=dispatcher,
-        mac_secret=cfg.web.mac_secret,
+        secrets=secrets,
         ping_interval=cfg.web.ping_interval,
         admin_auth=cfg.web.admin_auth,
         conn_shed_rate=cfg.web.conn_shed_rate,

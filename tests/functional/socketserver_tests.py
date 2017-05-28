@@ -1,5 +1,6 @@
 import unittest
 
+from baseplate.secrets import SecretsStore
 import webtest
 from mock import Mock, patch
 
@@ -10,10 +11,11 @@ NOT_WEBSOCKET_RESP_BODY = 'you are not a websocket'
 
 class WebsocketServiceTests(unittest.TestCase):
     def setUp(self):
+        secrets = SecretsStore("example_secrets.json")
         self.app = SocketServer(
             metrics=Mock(),
             dispatcher=Mock(),
-            mac_secret='test',
+            secrets=secrets,
             ping_interval=1,
             admin_auth='test-auth',
             conn_shed_rate=5,

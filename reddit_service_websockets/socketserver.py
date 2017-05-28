@@ -1,4 +1,3 @@
-import base64
 import logging
 import sys
 import urlparse
@@ -8,7 +7,7 @@ import geventwebsocket
 import geventwebsocket.handler
 from geventwebsocket.websocket import WebSocket
 
-from baseplate.crypto import MessageSigner, SignatureError
+from baseplate.crypto import validate_signature, SignatureError
 
 from .patched_websocket import read_frame as patched_read_frame
 from .patched_websocket import send_raw_frame
@@ -90,7 +89,9 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
             query_string = self.environ["QUERY_STRING"]
             params = urlparse.parse_qs(query_string, strict_parsing=True)
             signature = params["m"][0]
-            app.signer.validate_signature(namespace, signature)
+
+            secret = app.secrets.get_versioned("secret/websockets/authorization_key")
+            validate_signature(secret, namespace, signature)
         except (KeyError, IndexError, ValueError, SignatureError):
             app.metrics.counter("conn.rejected.bad_namespace").increment()
             self.start_response("403 Forbidden", [])
@@ -124,14 +125,14 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
 class SocketServer(object):
     def __init__(self, metrics,
                  dispatcher,
-                 mac_secret,
+                 secrets,
                  ping_interval,
                  admin_auth,
                  conn_shed_rate,
     ):
         self.metrics = metrics
         self.dispatcher = dispatcher
-        self.signer = MessageSigner(mac_secret)
+        self.secrets = secrets
         self.ping_interval = ping_interval
         self.admin_auth = admin_auth
         self.shed_rate_per_sec = conn_shed_rate

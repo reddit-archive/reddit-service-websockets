@@ -1,6 +1,7 @@
 """Unit tests for SocketServer."""
 import unittest
 
+from baseplate.secrets import SecretsStore
 import geventwebsocket.websocket
 from geventwebsocket.websocket import WebSocket
 from mock import (
@@ -17,10 +18,11 @@ from reddit_service_websockets.socketserver import (
 class SocketServerTests(unittest.TestCase):
 
     def setUp(self):
+        secrets = SecretsStore("example_secrets.json")
         self.server = SocketServer(
             metrics=Mock(),
             dispatcher=Mock(),
-            mac_secret='test',
+            secrets=secrets,
             ping_interval=1,
             admin_auth='test-auth',
             conn_shed_rate=5,
