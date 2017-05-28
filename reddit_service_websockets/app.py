@@ -2,7 +2,10 @@ import signal
 
 import gevent
 
-from baseplate import config, make_metrics_client
+from baseplate import (
+    config,
+    metrics_client_from_config,
+)
 import manhole
 
 from .dispatcher import MessageDispatcher
@@ -40,7 +43,7 @@ CONFIG_SPEC = {
 def make_app(raw_config):
     cfg = config.parse_config(raw_config, CONFIG_SPEC)
 
-    metrics_client = make_metrics_client(raw_config)
+    metrics_client = metrics_client_from_config(raw_config)
 
     dispatcher = MessageDispatcher(metrics=metrics_client)
 
