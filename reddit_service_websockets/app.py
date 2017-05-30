@@ -6,10 +6,8 @@ import manhole
 from baseplate import (
     config,
     metrics_client_from_config,
-    error_reporter_from_config,
 )
 from baseplate.secrets import secrets_store_from_config
-from raven.middleware import Sentry
 
 from .dispatcher import MessageDispatcher
 from .socketserver import SocketServer
@@ -46,7 +44,6 @@ def make_app(raw_config):
     cfg = config.parse_config(raw_config, CONFIG_SPEC)
 
     metrics_client = metrics_client_from_config(raw_config)
-    error_reporter = error_reporter_from_config(raw_config, __name__)
     secrets = secrets_store_from_config(raw_config)
 
     dispatcher = MessageDispatcher(metrics=metrics_client)
@@ -77,9 +74,5 @@ def make_app(raw_config):
     app.status_publisher = source.send_message
 
     gevent.spawn(source.pump_messages)
-
-    # wrap the wsgi app with the raven middleware to publish exceptions back to
-    # sentry (since we don't have proper baseplate spans here)
-    app = Sentry(app, error_reporter)
 
     return app

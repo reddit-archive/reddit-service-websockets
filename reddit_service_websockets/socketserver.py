@@ -45,16 +45,6 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
         # geventwebsocket logs every request at INFO level. that's annoying.
         pass
 
-    @property
-    def socket_server(self):
-        # this is a pretty nasty smell. we're violating the wsgi model by
-        # expecting the application callable to be of a specific type so that
-        # we can get access to its state for various things (metrics, secrets).
-        # this property at least gets us a little encapsulation.
-        socket_server = self.application.application
-        assert isinstance(socket_server, SocketServer)
-        return socket_server
-
     def upgrade_connection(self):
         """Validate authorization to attach to a namespace before connecting.
 
@@ -69,7 +59,7 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
             # if this error is happening, you probably need to update your proxy
             raise Exception("no client address. check x-forwarded-{for,port}")
 
-        app = self.socket_server
+        app = self.application
 
         # Check if compression is supported.  The RFC explanation for the
         # variations on what is accepted here is convoluted, so we'll just
@@ -113,10 +103,10 @@ class WebSocketHandler(geventwebsocket.handler.WebSocketHandler):
             headers.append(("Sec-WebSocket-Extensions",
                             "permessage-deflate; server_no_context_takeover; "
                             "client_no_context_takeover"))
-            self.socket_server.metrics.counter(
+            self.application.metrics.counter(
                 "compression.permessage-deflate").increment()
         else:
-            self.socket_server.metrics.counter("compression.none").increment()
+            self.application.metrics.counter("compression.none").increment()
 
         return super(WebSocketHandler, self).start_response(
             status, headers, exc_info=exc_info)
