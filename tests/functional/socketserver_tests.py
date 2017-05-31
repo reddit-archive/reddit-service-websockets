@@ -16,6 +16,7 @@ class WebsocketServiceTests(unittest.TestCase):
             metrics=Mock(),
             dispatcher=Mock(),
             secrets=secrets,
+            error_reporter=None,
             ping_interval=1,
             admin_auth='test-auth',
             conn_shed_rate=5,
