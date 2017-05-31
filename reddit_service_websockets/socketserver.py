@@ -8,6 +8,7 @@ import geventwebsocket.handler
 from geventwebsocket.websocket import WebSocket
 
 from baseplate.crypto import validate_signature, SignatureError
+from raven.utils.wsgi import get_current_url, get_headers, get_environ
 
 from .patched_websocket import read_frame as patched_read_frame
 from .patched_websocket import send_raw_frame
@@ -116,6 +117,7 @@ class SocketServer(object):
     def __init__(self, metrics,
                  dispatcher,
                  secrets,
+                 error_reporter,
                  ping_interval,
                  admin_auth,
                  conn_shed_rate,
@@ -123,6 +125,7 @@ class SocketServer(object):
         self.metrics = metrics
         self.dispatcher = dispatcher
         self.secrets = secrets
+        self.error_reporter = error_reporter
         self.ping_interval = ping_interval
         self.admin_auth = admin_auth
         self.shed_rate_per_sec = conn_shed_rate
@@ -131,6 +134,24 @@ class SocketServer(object):
         self.connections = set()
 
     def __call__(self, environ, start_response):
+        try:
+            return self._handle_request(environ, start_response)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            if self.error_reporter:
+                self.error_reporter.http_context({
+                    'method': environ.get('REQUEST_METHOD'),
+                    'url': get_current_url(environ, strip_querystring=True),
+                    'query_string': environ.get('QUERY_STRING'),
+                    'headers': dict(get_headers(environ)),
+                    'env': dict(get_environ(environ)),
+                })
+                self.error_reporter.captureException()
+                self.error_reporter.context.clear()
+            raise
+
+    def _handle_request(self, environ, start_response):
         path_info = environ["PATH_INFO"]
         req_method = environ['REQUEST_METHOD']
 

@@ -6,6 +6,7 @@ import manhole
 from baseplate import (
     config,
     metrics_client_from_config,
+    error_reporter_from_config,
 )
 from baseplate.secrets import secrets_store_from_config
 
@@ -44,6 +45,7 @@ def make_app(raw_config):
     cfg = config.parse_config(raw_config, CONFIG_SPEC)
 
     metrics_client = metrics_client_from_config(raw_config)
+    error_reporter = error_reporter_from_config(raw_config, __name__)
     secrets = secrets_store_from_config(raw_config)
 
     dispatcher = MessageDispatcher(metrics=metrics_client)
@@ -56,6 +58,7 @@ def make_app(raw_config):
         metrics=metrics_client,
         dispatcher=dispatcher,
         secrets=secrets,
+        error_reporter=error_reporter,
         ping_interval=cfg.web.ping_interval,
         admin_auth=cfg.web.admin_auth,
         conn_shed_rate=cfg.web.conn_shed_rate,
