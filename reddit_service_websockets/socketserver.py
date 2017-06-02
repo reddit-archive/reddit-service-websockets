@@ -139,15 +139,17 @@ class SocketServer(object):
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
-            self.error_reporter.http_context({
-                'method': environ.get('REQUEST_METHOD'),
-                'url': get_current_url(environ, strip_querystring=True),
-                'query_string': environ.get('QUERY_STRING'),
-                'headers': dict(get_headers(environ)),
-                'env': dict(get_environ(environ)),
-            })
-            self.error_reporter.captureException()
-            self.error_reporter.context.clear()
+            if self.error_reporter:
+                self.error_reporter.http_context({
+                    'method': environ.get('REQUEST_METHOD'),
+                    'url': get_current_url(environ, strip_querystring=True),
+                    'query_string': environ.get('QUERY_STRING'),
+                    'headers': dict(get_headers(environ)),
+                    'env': dict(get_environ(environ)),
+                })
+                self.error_reporter.captureException()
+                self.error_reporter.context.clear()
+            raise
 
     def _handle_request(self, environ, start_response):
         path_info = environ["PATH_INFO"]
